@@ -46,7 +46,7 @@ def run():
         except Exception as e:
                 print("Cannot open/extract archive, saving to retry.txt")
                 with open("retry.txt", 'a' if os.path.exists("retry.txt") else 'w') as f:
-                    f.writelines([dump_file_name, "\n"])
+                    f.writelines([dump_file_name, ": ", str(e), "\n"])
                 extraction_success = False
         
         print("Removing archive")
@@ -54,7 +54,7 @@ def run():
 
         if extraction_success:
             print("Restoring dump")
-            os.system("/cluster/home/ayaris/mongodb-linux-x86_64-rhel70-5.0.7/bin/mongorestore --quiet --host=%s -d ghtorrent /cluster/scratch/ayaris/dump/github/" % mongo_host)
+            os.system("/cluster/home/ayaris/mongodb-linux-x86_64-rhel70-5.0.7/bin/mongorestore --quiet --host=%s -d ghtorrent /cluster/scratch/ayaris/dump/github/" % mongo_client.address[0])
 
         print("Clearing extraction directory")
         for i in os.listdir(extraction_directory):
