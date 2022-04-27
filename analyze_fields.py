@@ -7,7 +7,9 @@ from database_connectors import mongo_client, psql_cursor
 SAMPLE_SIZE = 5000000
 
 def combine_fields(documents, combined = {}, document_count = -1, collection_name = ""):
-        
+	if os.path.exists("log.txt"):
+		os.remove("log.txt")
+
 	document_index = 1
 	for document in documents:
 		if document_count >= 0:
