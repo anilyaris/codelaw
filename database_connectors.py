@@ -12,6 +12,6 @@ except Exception as e:
     mongo_client = None
 
 try:
-    psql_cursor = psycopg2.connect(host=psql_host, database="ghtorrent")
+    psql_conn = psycopg2.connect(host=psql_host, database="ghtorrent", user="ghtorrent")
 except Exception as e:
-    psql_cursor = None
+    psql_conn = None
