@@ -31,7 +31,7 @@ def run():
         if os.path.exists("stop.txt"):
             break
 
-        if dump_date.d == 1:
+        if dump_date.d == 1 and dump_date.m == 12 and dump_date.y == 2015:
 
             dump_file_name = "mongo-dump-" + str(dump_date) + ".tar.gz"
             dump_file_url = "http://ghtorrent-downloads.ewi.tudelft.nl/mongo-daily/" + dump_file_name
@@ -68,7 +68,7 @@ def run():
                     print("Processing", table_name)
                     data_transfer_functions["process_" + table_name]()
 
-                mongo_client.drop_database("ghtorrent")
+                break # mongo_client.drop_database("ghtorrent")
 
         dump_date = dump_date + 1
 
