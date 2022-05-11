@@ -17,18 +17,19 @@ def generate_labels(patch, labels = {}):
             labels[k + "_added"] = False
             labels[k + "_removed"] = False
 
-    for line in patch.splitlines():
-        added = line[0] == '+'
-        removed = line[0] == '-'
-        if added or removed:
+    for line in patch.split('\n'):
+        if line:
+            added = line[0] == '+'
+            removed = line[0] == '-'
+            if added or removed:
 
-            for c in line:
-                if c.isalpha():     # only try to match if line has alphanumeric characters
-                    for keyword in keywords:
-                        key = keyword + ("_added" if added else "_removed")
-                        labels[key] = labels[key] or match_keyword(line, keyword)
-                        
-                    break   # from alphanumeric check
+                for c in line:
+                    if c.isalpha():     # only try to match if line has alphanumeric characters
+                        for keyword in keywords:
+                            key = keyword + ("_added" if added else "_removed")
+                            labels[key] = labels[key] or match_keyword(line, keyword)
+                            
+                        break   # from alphanumeric check
 
     return labels
 
