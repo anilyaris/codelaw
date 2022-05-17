@@ -2,7 +2,7 @@ import pymongo
 import psycopg2
 import keywords
 from datetime import datetime
-from database_connectors import mongo_client, psql_conn
+from database_connectors import Conntectors
 
 pipelines = {
     "issue_comments": [ {"$project": {"id": 1, "updated_at": 1, "body": 1, "owner": 1, "repo": 1, "issue_id": 1} }],
@@ -14,11 +14,16 @@ pipelines = {
 }
 
 def sanitize(text):
-    text = text.replace('\x00', '')
+    if text:
+        text = text.replace('\x00', '')
     return text
 
 def process_issue_comments():
-    return
+    
+    connectors = Conntectors()
+    psql_conn = connectors.psql_conn
+    mongo_client = connectors.mongo_client
+
     cursor = psql_conn.cursor()
     document_count = mongo_client.ghtorrent.issue_comments.count_documents({})
     document_index = 1
@@ -40,9 +45,15 @@ def process_issue_comments():
 
     psql_conn.commit()
     cursor.close()
+    mongo_client.ghtorrent.issue_comments.drop()
+    connectors.close()
 
 def process_commits():
-    return
+
+    connectors = Conntectors()
+    psql_conn = connectors.psql_conn
+    mongo_client = connectors.mongo_client
+    
     cursor = psql_conn.cursor()
     document_count = mongo_client.ghtorrent.commits.count_documents({})
     document_index = 1
@@ -99,12 +110,24 @@ def process_commits():
 
     psql_conn.commit()
     cursor.close()
+    mongo_client.ghtorrent.commits.drop()
+    connectors.close()
 
 def process_issue_events():
-    return
+    
+    connectors = Conntectors()
+    psql_conn = connectors.psql_conn
+    mongo_client = connectors.mongo_client
+
+    mongo_client.ghtorrent.issue_events.drop()
+    connectors.close()
 
 def process_issues():
     
+    connectors = Conntectors()
+    psql_conn = connectors.psql_conn
+    mongo_client = connectors.mongo_client
+
     cursor = psql_conn.cursor()
     document_count = mongo_client.ghtorrent.issues.count_documents({})
     document_index = 1
@@ -114,40 +137,31 @@ def process_issues():
             f.write("issues: Document %d of %d" % (document_index, document_count))
         document_index += 1
         
-        query = "WITH r AS ( \
-            SELECT p.id FROM users u, projects p \
-            WHERE p.name = (%s) AND u.login = (%s) AND p.owner_id = u.id \
-            )" + (", extant AS ( \
-            SELECT repo_milestones.id FROM r, repo_milestones WHERE repo_id = r.id AND name = (%s) \
-            ), inserted AS ( \
-            INSERT INTO repo_milestones(repo_id, name, description) \
-            SELECT r.id, (%s), (%s) FROM r \
-            WHERE NOT EXISTS (SELECT NULL FROM extant)  \
-            RETURNING id \
-            )" if 'milestone' in d and d['milestone'] else "") + " INSERT INTO mongo_issues SELECT \
-            r.id, (%s), \
-            (%s), (%s), " + ("m.id" if 'milestone' in d and d['milestone'] else "NULL") + ", \
+        cursor.execute("INSERT INTO mongo_issues VALUES ( \
+            (%s), (%s), (%s), \
+            (%s), (%s), NULL, \
             (%s), (%s), \
             (%s), (%s) \
-            FROM r" + (", (SELECT id FROM inserted UNION ALL SELECT id FROM extant) AS m" if 'milestone' in d and d['milestone'] else "")
-            
-        vars = [
-            d['repo'], d['owner']] + ([
-            d['milestone']['title'],
-            d['milestone']['title'], sanitize(d['milestone']['description'])] if 'milestone' in d and d['milestone'] else []) + [
-            d['number'], 
-            d['title'], d['state'] == 'open', 
-            datetime.strptime(d['updated_at'], "%Y-%m-%dT%H:%M:%SZ"), None if d['closed_at'] is None else datetime.strptime(d['closed_at'], "%Y-%m-%dT%H:%M:%SZ"), 
-            sanitize(d['body']), d['closed_by']['login'] if 'closed_by'in d and d['closed_by'] else None             
-        ]
-
-        cursor.execute(query, vars)
+            )",
+            (
+                d['repo'], d['owner'], d['number'], 
+                sanitize(d['title']), d['state'] == 'open', 
+                datetime.strptime(d['updated_at'], "%Y-%m-%dT%H:%M:%SZ"), None if d['closed_at'] is None else datetime.strptime(d['closed_at'], "%Y-%m-%dT%H:%M:%SZ"), 
+                sanitize(d['body']), d['closed_by']['login'] if 'closed_by'in d and d['closed_by'] else None             
+            )
+        )
 
     psql_conn.commit()
     cursor.close()
+    mongo_client.ghtorrent.issues.drop()
+    connectors.close()
 
 def process_pull_requests():
 
+    connectors = Conntectors()
+    psql_conn = connectors.psql_conn
+    mongo_client = connectors.mongo_client
+    
     cursor = psql_conn.cursor()
     document_count = mongo_client.ghtorrent.pull_requests.count_documents({})
     document_index = 1
@@ -159,7 +173,7 @@ def process_pull_requests():
         
         cursor.execute("INSERT INTO mongo_pull_requests VALUES ( \
             (%s), (%s), (%s), \
-            (%s), (%s) \
+            (%s), (%s), \
             (%s) \
             )",
             (
@@ -171,8 +185,14 @@ def process_pull_requests():
 
     psql_conn.commit()
     cursor.close()
+    mongo_client.ghtorrent.pull_requests.drop()
+    connectors.close()
 
 def process_repos():
+
+    connectors = Conntectors()
+    psql_conn = connectors.psql_conn
+    mongo_client = connectors.mongo_client
     
     cursor = psql_conn.cursor()
     document_count = mongo_client.ghtorrent.repos.count_documents({})
@@ -197,3 +217,5 @@ def process_repos():
 
     psql_conn.commit()
     cursor.close()
+    mongo_client.ghtorrent.repos.drop()
+    connectors.close()
