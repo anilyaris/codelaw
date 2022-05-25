@@ -1,16 +1,18 @@
 import pymongo
 import psycopg2
 import keywords
+from io import StringIO
 from datetime import datetime
+from multiprocessing import Pool
 from database_connectors import Conntectors
 
 pipelines = {
     "issue_comments": [ {"$project": {"id": 1, "updated_at": 1, "body": 1, "owner": 1, "repo": 1, "issue_id": 1} }],
-    "commits": [ {"$project": {"sha": 1, "message": "$commit.message", "files.sha": 1, "files.filename": 1, "files.status": 1, "files.patch": 1} }],
-    "issue_events": [ {"$project": {"url": 0, "actor": 0, "event": 0, "commit_id": 0, "commit_url": 0, "created_at": 0, "owner": 0, "repo": 0, "issue_id": 0} }, {"$redact": {"$cond": {"if": {"$gt": [{ "$size": { "$objectToArray": "$$CURRENT" } }, 2]}, "then": "$$KEEP", "else": "$$PRUNE" } } }],
-    "issues": [ {"$project": {"id": 1, "number": 1, "title": 1, "labels.name": 1, "state": 1, "locked": 1, "milestone": 1, "updated_at": 1, "closed_at": 1, "body": 1, "closed_by.login": 1, "closed_by.id": 1, "repo": 1, "owner": 1} }],
-    "pull_requests": [ {"$project": {"id": 1, "number": 1, "state": 1, "locked": 1, "merged_at": 1, "merged": 1, "merged_by.id": 1, "merged_by.login": 1, "repo": 1, "owner": 1} }],
-    "repos": [ {"$project": {"id": 1, "name": 1, "owner.login": 1, "owner.id": 1, "private": 1, "pushed_at": 1, "homepage": 1, "has_wiki": 1, "has_pages": 1} }],
+    "commits": [ {"$project": {"sha": 1, "message": "$commit.message", "files.filename": 1, "files.patch": 1} }],
+    #"issue_events": [ {"$project": {"url": 0, "actor": 0, "event": 0, "commit_id": 0, "commit_url": 0, "created_at": 0, "owner": 0, "repo": 0, "issue_id": 0} }, {"$redact": {"$cond": {"if": {"$gt": [{ "$size": { "$objectToArray": "$$CURRENT" } }, 2]}, "then": "$$KEEP", "else": "$$PRUNE" } } }],
+    "issues": [ {"$project": {"number": 1, "title": 1, "state": 1, "updated_at": 1, "closed_at": 1, "body": 1, "closed_by.login": 1, "repo": 1, "owner": 1} }],
+    "pull_requests": [ {"$project": {"number": 1, "merged_at": 1, "merged": 1, "merged_by.login": 1, "repo": 1, "owner": 1} }],
+    "repos": [ {"$project": {"name": 1, "owner.login": 1, "private": 1, "pushed_at": 1, "homepage": 1, "has_wiki": 1, "has_pages": 1} }],
 }
 
 def sanitize(text):
@@ -18,15 +20,15 @@ def sanitize(text):
         text = text.replace('\x00', '')
     return text
 
-def process_issue_comments():
+def process_issue_comments(docs):
     
     connectors = Conntectors()
-    psql_conn = connectors.psql_conn
-    mongo_client = connectors.mongo_client
-
+    psql_conn = connectors.psql_conn    
     cursor = psql_conn.cursor()
-    document_count = mongo_client.ghtorrent.issue_comments.count_documents({})
-    document_index = 1
+
+    cpy = StringIO()
+    for d in docs:
+
 
     for d in mongo_client.ghtorrent.issue_comments.aggregate(pipelines["issue_comments"]):
         with open("issue_comments.txt", 'w') as f:
@@ -45,18 +47,13 @@ def process_issue_comments():
 
     psql_conn.commit()
     cursor.close()
-    mongo_client.ghtorrent.issue_comments.drop()
     connectors.close()
 
-def process_commits():
+def process_commits(docs):
 
     connectors = Conntectors()
-    psql_conn = connectors.psql_conn
-    mongo_client = connectors.mongo_client
-    
+    psql_conn = connectors.psql_conn    
     cursor = psql_conn.cursor()
-    document_count = mongo_client.ghtorrent.commits.count_documents({})
-    document_index = 1
 
     for d in mongo_client.ghtorrent.commits.aggregate(pipelines["commits"]):
         with open("commits.txt", 'w') as f:
@@ -110,27 +107,22 @@ def process_commits():
 
     psql_conn.commit()
     cursor.close()
-    mongo_client.ghtorrent.commits.drop()
     connectors.close()
 
-def process_issue_events():
+def process_issue_events(docs):
     
     connectors = Conntectors()
-    psql_conn = connectors.psql_conn
-    mongo_client = connectors.mongo_client
-
-    mongo_client.ghtorrent.issue_events.drop()
-    connectors.close()
-
-def process_issues():
-    
-    connectors = Conntectors()
-    psql_conn = connectors.psql_conn
-    mongo_client = connectors.mongo_client
-
+    psql_conn = connectors.psql_conn    
     cursor = psql_conn.cursor()
-    document_count = mongo_client.ghtorrent.issues.count_documents({})
-    document_index = 1
+
+    cursor.close()
+    connectors.close()
+
+def process_issues(docs):
+    
+    connectors = Conntectors()
+    psql_conn = connectors.psql_conn    
+    cursor = psql_conn.cursor()
 
     for d in mongo_client.ghtorrent.issues.aggregate(pipelines["issues"]):
         with open("issues.txt", 'w') as f:
@@ -153,18 +145,13 @@ def process_issues():
 
     psql_conn.commit()
     cursor.close()
-    mongo_client.ghtorrent.issues.drop()
     connectors.close()
 
-def process_pull_requests():
+def process_pull_requests(docs):
 
     connectors = Conntectors()
-    psql_conn = connectors.psql_conn
-    mongo_client = connectors.mongo_client
-    
+    psql_conn = connectors.psql_conn    
     cursor = psql_conn.cursor()
-    document_count = mongo_client.ghtorrent.pull_requests.count_documents({})
-    document_index = 1
 
     for d in mongo_client.ghtorrent.pull_requests.aggregate(pipelines["pull_requests"]):
         with open("pull_requests.txt", 'w') as f:
@@ -185,18 +172,13 @@ def process_pull_requests():
 
     psql_conn.commit()
     cursor.close()
-    mongo_client.ghtorrent.pull_requests.drop()
     connectors.close()
 
-def process_repos():
+def process_repos(docs):
 
     connectors = Conntectors()
-    psql_conn = connectors.psql_conn
-    mongo_client = connectors.mongo_client
-    
+    psql_conn = connectors.psql_conn    
     cursor = psql_conn.cursor()
-    document_count = mongo_client.ghtorrent.repos.count_documents({})
-    document_index = 1
 
     for d in mongo_client.ghtorrent.repos.aggregate(pipelines["repos"]):
         with open("repos.txt", 'w') as f:
@@ -217,5 +199,47 @@ def process_repos():
 
     psql_conn.commit()
     cursor.close()
-    mongo_client.ghtorrent.repos.drop()
+    connectors.close()
+
+def fetch_commits(d):
+    filename_keyword_flag = False
+    patch_keyword_labels = keywords.generate_labels("")
+
+    if 'files' in d and d['files']:
+        for f in d['files']:
+            for k in keywords.keywords:
+                filename_keyword_flag = filename_keyword_flag or keywords.match_keyword(f['filename'], k)
+
+            if 'patch' in f and f['patch']:
+                patch_keyword_labels = keywords.generate_labels(f['patch'], patch_keyword_labels)
+
+        d.pop('files')
+
+    d['labels'] = [filename_keyword_flag] + list(patch_keyword_labels.values())
+    return d
+
+def print_commits(d, i, c):
+    with open("commits.txt", 'w') as f:
+        f.write("commits: Document %d of %d" % (i[0], c)) 
+    i[0] += 1
+    return d
+
+def fetchall(table_name, return_list):
+    connectors = Conntectors()
+    mongo_client = connectors.mongo_client
+
+    if table_name != "commits":
+        cpy = StringIO()
+        return_list[:] = [stringify(d, table_name, cpy) for d in mongo_client.ghtorrent[table_name].aggregate(pipelines[table_name])]
+    
+    else:
+        document_index = [1]
+        document_count = mongo_client.ghtorrent.commits.count_documents({})
+
+        pool = Pool(processes=10)
+        return_list[:] = [print_commits(d, document_index, document_count) for d in pool.imap_unordered(fetch_commits, mongo_client.ghtorrent.commits.aggregate(pipelines["commits"]), 10000)]
+
+        pool.close()
+        pool.join()
+
     connectors.close()
