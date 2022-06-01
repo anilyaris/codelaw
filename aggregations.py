@@ -1,5 +1,6 @@
 import pymongo
 import psycopg2
+import time
 import keywords
 from io import StringIO
 from datetime import datetime
@@ -8,7 +9,7 @@ from database_connectors import Conntectors
 
 pipelines = {
     "issue_comments": [ {"$project": {"id": 1, "updated_at": 1, "body": 1, "owner": 1, "repo": 1, "issue_id": 1} }],
-    "commits": [ {"$project": {"sha": 1, "message": "$commit.message", "files.filename": 1, "files.patch": 1} }],
+    "commits": [ {"$limit": 100000}, {"$project": {"sha": 1, "message": "$commit.message", "files.filename": 1, "files.patch": 1} }],
     #"issue_events": [ {"$project": {"url": 0, "actor": 0, "event": 0, "commit_id": 0, "commit_url": 0, "created_at": 0, "owner": 0, "repo": 0, "issue_id": 0} }, {"$redact": {"$cond": {"if": {"$gt": [{ "$size": { "$objectToArray": "$$CURRENT" } }, 2]}, "then": "$$KEEP", "else": "$$PRUNE" } } }],
     "issues": [ {"$project": {"number": 1, "title": 1, "state": 1, "updated_at": 1, "closed_at": 1, "body": 1, "closed_by.login": 1, "repo": 1, "owner": 1} }],
     "pull_requests": [ {"$project": {"number": 1, "merged_at": 1, "merged": 1, "merged_by.login": 1, "repo": 1, "owner": 1} }],
@@ -25,10 +26,6 @@ def process_issue_comments(docs):
     connectors = Conntectors()
     psql_conn = connectors.psql_conn    
     cursor = psql_conn.cursor()
-
-    cpy = StringIO()
-    for d in docs:
-
 
     for d in mongo_client.ghtorrent.issue_comments.aggregate(pipelines["issue_comments"]):
         with open("issue_comments.txt", 'w') as f:
@@ -218,9 +215,12 @@ def fetch_commits(d):
     d['labels'] = [filename_keyword_flag] + list(patch_keyword_labels.values())
     return d
 
-def print_commits(d, i, c):
+def print_commits(d, i, c, t=None):
     with open("commits.txt", 'w') as f:
-        f.write("commits: Document %d of %d" % (i[0], c)) 
+        f.write("commits: Document %d of %d" % (i[0], c))
+        if t is not None:
+            f.write("\nelapsed time: ")
+            f.write(str(time.time() - t)) 
     i[0] += 1
     return d
 
@@ -229,15 +229,19 @@ def fetchall(table_name, return_list):
     mongo_client = connectors.mongo_client
 
     if table_name != "commits":
-        cpy = StringIO()
-        return_list[:] = [stringify(d, table_name, cpy) for d in mongo_client.ghtorrent[table_name].aggregate(pipelines[table_name])]
+        # cpy = StringIO()
+        # for d in mongo_client.ghtorrent[table_name].aggregate(pipelines[table_name]):
+        #     cpy.write(stringify(d, table_name))
+        # return_list.append(cpy)
+        return_list[:] = [d for d in mongo_client.ghtorrent[table_name].aggregate(pipelines[table_name])]
     
     else:
         document_index = [1]
         document_count = mongo_client.ghtorrent.commits.count_documents({})
 
         pool = Pool(processes=10)
-        return_list[:] = [print_commits(d, document_index, document_count) for d in pool.imap_unordered(fetch_commits, mongo_client.ghtorrent.commits.aggregate(pipelines["commits"]), 10000)]
+        start = time.time()
+        return_list[:] = [print_commits(d, document_index, document_count, start) for d in pool.imap_unordered(fetch_commits, mongo_client.ghtorrent.commits.aggregate(pipelines["commits"]), 10000)]
 
         pool.close()
         pool.join()
