@@ -2,14 +2,13 @@ import pymongo
 import psycopg2
 import time
 import keywords
-from io import StringIO
 from datetime import datetime
 from multiprocessing import Pool
 from database_connectors import Conntectors
 
 pipelines = {
     "issue_comments": [ {"$project": {"id": 1, "updated_at": 1, "body": 1, "owner": 1, "repo": 1, "issue_id": 1} }],
-    "commits": [ {"$limit": 100000}, {"$project": {"sha": 1, "message": "$commit.message", "files.filename": 1, "files.patch": 1} }],
+    "commits": [ {"$project": {"sha": 1, "message": "$commit.message", "files.filename": 1, "files.patch": 1} }],
     #"issue_events": [ {"$project": {"url": 0, "actor": 0, "event": 0, "commit_id": 0, "commit_url": 0, "created_at": 0, "owner": 0, "repo": 0, "issue_id": 0} }, {"$redact": {"$cond": {"if": {"$gt": [{ "$size": { "$objectToArray": "$$CURRENT" } }, 2]}, "then": "$$KEEP", "else": "$$PRUNE" } } }],
     "issues": [ {"$project": {"number": 1, "title": 1, "state": 1, "updated_at": 1, "closed_at": 1, "body": 1, "closed_by.login": 1, "repo": 1, "owner": 1} }],
     "pull_requests": [ {"$project": {"number": 1, "merged_at": 1, "merged": 1, "merged_by.login": 1, "repo": 1, "owner": 1} }],
@@ -21,227 +20,110 @@ def sanitize(text):
         text = text.replace('\x00', '')
     return text
 
-def process_issue_comments(docs):
-    
-    connectors = Conntectors()
-    psql_conn = connectors.psql_conn    
-    cursor = psql_conn.cursor()
+def label_body(d):
+    body_keyword_labels = keywords.generate_labels()
+    keywords.match_keywords(d['body'], body_keyword_labels)
+    d.pop('body')
 
-    for d in mongo_client.ghtorrent.issue_comments.aggregate(pipelines["issue_comments"]):
-        with open("issue_comments.txt", 'w') as f:
-            f.write("issue_comments: Document %d of %d" % (document_index, document_count))
-        document_index += 1
-        
-        cursor.execute("INSERT INTO mongo_issue_comments VALUES ( \
-            (%s), (%s), (%s), (%s), \
-            (%s), (%s) \
-            )",
-            (
-                d['repo'], d['owner'], d['issue_id'], str(d['id']), 
-                None if d['updated_at'] is None else datetime.strptime(d['updated_at'], "%Y-%m-%dT%H:%M:%SZ"), sanitize(d['body'])
-            )
-        )
+    d['labels'] = list(body_keyword_labels.values())
 
-    psql_conn.commit()
-    cursor.close()
-    connectors.close()
+def label_title_body(d):
+    title_keyword_labels = keywords.generate_labels()
+    keywords.match_keywords(d['title'], title_keyword_labels)
+    title_keyword_flag = any(title_keyword_labels.values())
+    d.pop('title')
 
-def process_commits(docs):
+    body_keyword_labels = keywords.generate_labels()
+    keywords.match_keywords(d['body'], body_keyword_labels)
+    d.pop('body')
 
-    connectors = Conntectors()
-    psql_conn = connectors.psql_conn    
-    cursor = psql_conn.cursor()
+    d['labels'] = [title_keyword_flag] + list(body_keyword_labels.values())
 
-    for d in mongo_client.ghtorrent.commits.aggregate(pipelines["commits"]):
-        with open("commits.txt", 'w') as f:
-            f.write("commits: Document %d of %d" % (document_index, document_count))
-        document_index += 1
+def label_commit(d):
+    message_keyword_labels = keywords.generate_labels()
+    keywords.match_keywords(d['message'], message_keyword_labels)
+    message_keyword_flag = any(message_keyword_labels.values())
+    d.pop('message')
 
-        filename_keyword_flag = False
-        patch_keyword_labels = keywords.generate_labels("")
-
-        if 'files' in d and d['files']:
-            for f in d['files']:
-                for k in keywords.keywords:
-                    filename_keyword_flag = filename_keyword_flag or keywords.match_keyword(f['filename'], k)
-
-                if 'patch' in f and f['patch']:
-                    patch_keyword_labels = keywords.generate_labels(f['patch'], patch_keyword_labels)
-
-        cursor.execute("INSERT INTO mongo_commits VALUES ( \
-            (%s), (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s) \
-            )", 
-            (
-                d['sha'], sanitize(d['message']), filename_keyword_flag, 
-                patch_keyword_labels['gdpr_added'], patch_keyword_labels['gdpr_removed'],
-                patch_keyword_labels['rgpd_added'], patch_keyword_labels['rgpd_removed'], 
-                patch_keyword_labels['dsgvo_added'], patch_keyword_labels['dsgvo_removed'],
-                patch_keyword_labels['ccpa_added'], patch_keyword_labels['ccpa_removed'],
-                patch_keyword_labels['cpra_added'], patch_keyword_labels['cpra_removed'],
-                patch_keyword_labels['privacy_added'], patch_keyword_labels['privacy_removed'],
-                patch_keyword_labels['data_protection_added'], patch_keyword_labels['data_protection_removed'],
-                patch_keyword_labels['compliance_added'], patch_keyword_labels['compliance_removed'],
-                patch_keyword_labels['legal_added'], patch_keyword_labels['legal_removed'],
-                patch_keyword_labels['consent_added'], patch_keyword_labels['consent_removed'],
-                patch_keyword_labels['law_added'], patch_keyword_labels['law_removed'],
-                patch_keyword_labels['statute_added'], patch_keyword_labels['statute_removed'],
-                patch_keyword_labels['personal_data_added'], patch_keyword_labels['personal_data_removed']                
-            )
-        )
-
-    psql_conn.commit()
-    cursor.close()
-    connectors.close()
-
-def process_issue_events(docs):
-    
-    connectors = Conntectors()
-    psql_conn = connectors.psql_conn    
-    cursor = psql_conn.cursor()
-
-    cursor.close()
-    connectors.close()
-
-def process_issues(docs):
-    
-    connectors = Conntectors()
-    psql_conn = connectors.psql_conn    
-    cursor = psql_conn.cursor()
-
-    for d in mongo_client.ghtorrent.issues.aggregate(pipelines["issues"]):
-        with open("issues.txt", 'w') as f:
-            f.write("issues: Document %d of %d" % (document_index, document_count))
-        document_index += 1
-        
-        cursor.execute("INSERT INTO mongo_issues VALUES ( \
-            (%s), (%s), (%s), \
-            (%s), (%s), NULL, \
-            (%s), (%s), \
-            (%s), (%s) \
-            )",
-            (
-                d['repo'], d['owner'], d['number'], 
-                sanitize(d['title']), d['state'] == 'open', 
-                datetime.strptime(d['updated_at'], "%Y-%m-%dT%H:%M:%SZ"), None if d['closed_at'] is None else datetime.strptime(d['closed_at'], "%Y-%m-%dT%H:%M:%SZ"), 
-                sanitize(d['body']), d['closed_by']['login'] if 'closed_by'in d and d['closed_by'] else None             
-            )
-        )
-
-    psql_conn.commit()
-    cursor.close()
-    connectors.close()
-
-def process_pull_requests(docs):
-
-    connectors = Conntectors()
-    psql_conn = connectors.psql_conn    
-    cursor = psql_conn.cursor()
-
-    for d in mongo_client.ghtorrent.pull_requests.aggregate(pipelines["pull_requests"]):
-        with open("pull_requests.txt", 'w') as f:
-            f.write("pull_requests: Document %d of %d" % (document_index, document_count))
-        document_index += 1
-        
-        cursor.execute("INSERT INTO mongo_pull_requests VALUES ( \
-            (%s), (%s), (%s), \
-            (%s), (%s), \
-            (%s) \
-            )",
-            (
-                d['repo'], d['owner'], d['number'], 
-                None if d['merged_at'] is None else datetime.strptime(d['merged_at'], "%Y-%m-%dT%H:%M:%SZ"), d['merged'],
-                d['merged_by']['login'] if 'merged_by'in d and d['merged_by'] else None
-            )
-        )
-
-    psql_conn.commit()
-    cursor.close()
-    connectors.close()
-
-def process_repos(docs):
-
-    connectors = Conntectors()
-    psql_conn = connectors.psql_conn    
-    cursor = psql_conn.cursor()
-
-    for d in mongo_client.ghtorrent.repos.aggregate(pipelines["repos"]):
-        with open("repos.txt", 'w') as f:
-            f.write("repos: Document %d of %d" % (document_index, document_count))
-        document_index += 1
-        
-        cursor.execute("INSERT INTO mongo_projects VALUES ( \
-            (%s), (%s), \
-            (%s), (%s), \
-            (%s), (%s), (%s) \
-            )",
-            (
-                d['name'], d['owner']['login'],
-                d['private'], None if d['pushed_at'] is None else datetime.strptime(d['pushed_at'], "%Y-%m-%dT%H:%M:%SZ"), 
-                bool(d['homepage']), d['has_wiki'], d['has_pages']                
-            )
-        )
-
-    psql_conn.commit()
-    cursor.close()
-    connectors.close()
-
-def fetch_commits(d):
     filename_keyword_flag = False
-    patch_keyword_labels = keywords.generate_labels("")
+    filename_keyword_labels = keywords.generate_labels()
+    patch_keyword_labels = keywords.generate_labels(quantifiers=["_added", "_removed"])
 
     if 'files' in d and d['files']:
         for f in d['files']:
-            for k in keywords.keywords:
-                filename_keyword_flag = filename_keyword_flag or keywords.match_keyword(f['filename'], k)
+            if not filename_keyword_flag:
+                keywords.match_keywords(f['filename'], filename_keyword_labels)
+                filename_keyword_flag = any(filename_keyword_labels.values())
 
             if 'patch' in f and f['patch']:
                 patch_keyword_labels = keywords.generate_labels(f['patch'], patch_keyword_labels)
 
         d.pop('files')
 
-    d['labels'] = [filename_keyword_flag] + list(patch_keyword_labels.values())
+    d['labels'] = [message_keyword_flag, filename_keyword_flag] + list(patch_keyword_labels.values())
     return d
 
-def print_commits(d, i, c, t=None):
-    with open("commits.txt", 'w') as f:
-        f.write("commits: Document %d of %d" % (i[0], c))
-        if t is not None:
-            f.write("\nelapsed time: ")
-            f.write(str(time.time() - t)) 
-    i[0] += 1
-    return d
+def stringify(d, n, i=[], c=0, t=None):
+    if n == "issue_comments":
+        label_body(d)
+        s = ','.join([
+                        d['repo'], d['owner'], str(d['issue_id']), str(d['id']), 
+                        "" if d['updated_at'] is None else d['updated_at'][:10] + ' ' + d['updated_at'][11:-1]]
+                        + ['t' if l else 'f' for l in d['labels']
+                    ])
+
+    elif n == "commits":
+        s = ','.join([
+                        d['sha']] + ['t' if l else 'f' for l in d['labels']
+                    ])
+
+    elif n == "issues":
+        label_title_body(d)
+        s = ','.join([
+                        d['repo'], d['owner'], str(d['number']), 't' if d['state'] == 'open' else 'f',
+                        d['updated_at'][:10] + ' ' + d['updated_at'][11:-1], 
+                        "" if d['closed_at'] is None else d['closed_at'][:10] + ' ' + d['closed_at'][11:-1],
+                        d['closed_by']['login'] if 'closed_by' in d and d['closed_by'] else ""]
+                        + ['t' if l else 'f' for l in d['labels']
+                    ])
+
+    elif n == "pull_requests":
+        s = ','.join([
+                        d['repo'], d['owner'], str(d['number']),
+                        "" if d['merged_at'] is None else d['merged_at'][:10] + ' ' + d['merged_at'][11:-1], 't' if d['merged'] else 'f',
+                        d['merged_by']['login'] if 'merged_by' in d and d['merged_by'] else ""
+                    ])
+
+    elif n == "repos":
+        s = ','.join([
+                        d['name'], d['owner']['login'], 't' if d['private'] else 'f',
+                        "" if d['pushed_at'] is None else d['pushed_at'][:10] + ' ' + d['pushed_at'][11:-1],
+                        't' if bool(d['homepage']) else 'f', 't' if d['has_wiki'] else 'f', 't' if d['has_pages'] else 'f'
+                    ])
+
+    if i:
+        with open(n + ".txt", 'w') as f:
+            f.write(n + ": Document %d of %d" % (i[0], c))
+            if t:
+                f.write("\nelapsed time: ")
+                f.write(str(time.time() - t)) 
+        i[0] += 1
+
+    return s + '\n'
 
 def fetchall(table_name, return_list):
     connectors = Conntectors()
     mongo_client = connectors.mongo_client
 
+    document_index = [1]
+    document_count = mongo_client.ghtorrent[table_name].count_documents({})
+
     if table_name != "commits":
-        # cpy = StringIO()
-        # for d in mongo_client.ghtorrent[table_name].aggregate(pipelines[table_name]):
-        #     cpy.write(stringify(d, table_name))
-        # return_list.append(cpy)
-        return_list[:] = [d for d in mongo_client.ghtorrent[table_name].aggregate(pipelines[table_name])]
+        return_list[:] = [stringify(d, table_name, document_index, document_count) for d in mongo_client.ghtorrent[table_name].aggregate(pipelines[table_name])]
     
     else:
-        document_index = [1]
-        document_count = mongo_client.ghtorrent.commits.count_documents({})
-
         pool = Pool(processes=10)
-        start = time.time()
-        return_list[:] = [print_commits(d, document_index, document_count, start) for d in pool.imap_unordered(fetch_commits, mongo_client.ghtorrent.commits.aggregate(pipelines["commits"]), 10000)]
+        return_list[:] = [stringify(d, table_name, document_index, document_count) for d in pool.imap_unordered(label_commit, mongo_client.ghtorrent.commits.aggregate(pipelines["commits"]), 20000)]
 
         pool.close()
         pool.join()

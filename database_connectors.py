@@ -19,5 +19,7 @@ class Conntectors:
             self.psql_conn = None
 
     def close(self):
-        self.mongo_client.close()
-        self.psql_conn.close()
+        if self.mongo_client:
+            self.mongo_client.close()
+        if self.psql_conn:
+            self.psql_conn.close()

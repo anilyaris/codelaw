@@ -38,13 +38,9 @@ def total_size(o, handlers={}, verbose=False):
                     frozenset: iter,
                    }
     all_handlers.update(handlers)     # user handlers take precedence
-    seen = set()                      # track which object id's have already been seen
     default_size = sys.getsizeof(0)       # estimate sizeof object without __sizeof__
 
     def sizeof(o):
-        if id(o) in seen:       # do not double count the same object
-            return 0
-        seen.add(id(o))
         s = sys.getsizeof(o, default_size)
 
         if verbose:
@@ -58,15 +54,17 @@ def total_size(o, handlers={}, verbose=False):
 
     return sizeof(o)
 
+def write_batch(batch, file):
+    with open(file, 'a' if os.path.exists(file) else 'w') as f:
+        f.writelines(batch)
+
 def run():
     connectors = Conntectors()
     manager = Manager()
-    data_transfer_functions = aggregations.__dict__
     table_names = list(aggregations.pipelines.keys())
     table_batches = {name: [] for name in table_names}
     current_batch = [None] * len(table_names)
     batch_size = 0
-    commits_index = table_names.index("commits")
     processes = [None] * len(table_names)
  
     if os.path.exists("stop.txt"):
@@ -138,7 +136,7 @@ def run():
                 if stop or batch_size > 16 * 1024 * 1024 * 1024:
                     for index in range(len(table_names)):                
                         table_name = table_names[index]
-                        processes[index] = Process(data_transfer_functions("process_" + table_name), args=(table_batches[table_name], ))
+                        processes[index] = Process(write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/%s.csv" % table_name))
                         processes[index].start()
 
                     for index in range(len(table_names)):
@@ -147,8 +145,10 @@ def run():
                             processes[index].join()
                             table_batches[table_name] = []
                             processes[index] = None
-                    
 
+                    with open("start_line.txt", 'w') as f:
+                        f.write("%d" % line)
+                    
         if stop:
             break
 
@@ -173,9 +173,6 @@ def run():
                 processes[index].start()            
 
         line += 1
-
-        #with open("start_line.txt", 'w') as f:
-        #    f.write("%d" % line)
 
     connectors.close()
 
