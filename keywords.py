@@ -21,8 +21,9 @@ def match_keywords(text, labels, quantifier = ""):
                 labels[original_value + quantifier] = True
                     
 
-def generate_labels(patch = "", labels = {}, quantifiers = [""]):
+def generate_labels(patch = "", labels = None, quantifiers = [""]):
     if not labels:
+        labels = {}
         for k in keywords:
             for q in quantifiers:
                 labels[k + q] = False

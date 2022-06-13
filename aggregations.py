@@ -63,7 +63,7 @@ def label_commit(d):
     d['labels'] = [message_keyword_flag, filename_keyword_flag] + list(patch_keyword_labels.values())
     return d
 
-def stringify(d, n, i=[], c=0, t=None):
+def stringify(d, n, i=None, c=0, t=None):
     if n == "issue_comments":
         label_body(d)
         s = ','.join([
@@ -111,19 +111,19 @@ def stringify(d, n, i=[], c=0, t=None):
 
     return s + '\n'
 
-def fetchall(table_name, return_list):
+def fetchall(database_name, table_name, return_list):
     connectors = Conntectors()
     mongo_client = connectors.mongo_client
 
-    document_index = [1]
-    document_count = mongo_client.ghtorrent[table_name].count_documents({})
+    #document_index = [1]
+    #document_count = mongo_client[database_name][table_name].count_documents({})
 
     if table_name != "commits":
-        return_list[:] = [stringify(d, table_name, document_index, document_count) for d in mongo_client.ghtorrent[table_name].aggregate(pipelines[table_name])]
+        return_list[:] = [stringify(d, table_name) for d in mongo_client[database_name][table_name].aggregate(pipelines[table_name])]
     
     else:
         pool = Pool(processes=10)
-        return_list[:] = [stringify(d, table_name, document_index, document_count) for d in pool.imap_unordered(label_commit, mongo_client.ghtorrent.commits.aggregate(pipelines["commits"]), 20000)]
+        return_list[:] = [stringify(d, table_name) for d in pool.imap_unordered(label_commit, mongo_client[database_name].commits.aggregate(pipelines["commits"]), 20000)]
 
         pool.close()
         pool.join()
