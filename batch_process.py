@@ -81,26 +81,26 @@ def run():
     if os.path.exists("stop.txt"):
         os.remove("stop.txt")    
 
-    if direction_oldtonew:
-        if os.path.exists("start_line.txt"):
-            with open("start_line.txt", 'r') as f:
-                line = int(f.read())
-        else:
-            line = 5
-
+    if os.path.exists("start_line.txt"):
+        with open("start_line.txt", 'r') as f:
+            start_line = int(f.read())
     else:
-        if os.path.exists("end_line.txt"):
-            with open("end_line.txt", 'r') as f:
-                line = int(f.read())
-        else:
-            line = len(dump_files) - 3
+        start_line = 5
+
+    if os.path.exists("end_line.txt"):
+        with open("end_line.txt", 'r') as f:
+            end_line = int(f.read())
+    else:
+        end_line = len(dump_files) - 3
+
+    line = start_line if direction_oldtonew else end_line
 
     database_name = "ghtorrent"
     if direction_oldtonew:
         database_name += "2"
     extraction_directory = "/cluster/scratch/ayaris/%s/dump/github/" % database_name
 
-    cutoff = len(dump_files) // 2 + 1
+    cutoff = (start_line + end_line) // 2
     while (direction_oldtonew and line <= cutoff) or (not direction_oldtonew and line > cutoff):
 
         stop = os.path.exists("stop.txt")
@@ -192,6 +192,35 @@ def run():
             line += 1
         else:
             line -= 1
+
+
+    drop = False
+    for index in range(len(table_names)):
+        if processes[index] is not None:
+            processes[index].join()
+            processes[index] = None
+            drop = True
+
+    if drop:
+        for index in range(len(table_names)):
+            table_batches[table_names[index]] += current_batch[index]
+            current_batch[index] = None
+        connectors.mongo_client.drop_database(database_name)
+                
+        for index in range(len(table_names)):                
+            table_name = table_names[index]
+            processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s.csv" % table_name))
+            processes[index].start()
+
+        for index in range(len(table_names)):
+            if processes[index] is not None:                
+                table_name = table_names[index]
+                processes[index].join()
+                table_batches[table_name] = []
+                processes[index] = None
+
+        with open("start_line.txt" if direction_oldtonew else "end_line.txt", 'w') as f:
+            f.write("%d" % line)
 
     connectors.close()
 
