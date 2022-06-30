@@ -123,11 +123,11 @@ def run():
                         f.extractall(extraction_directory + "../..")
                         restore = True
                 except Exception as e:
-                        print("Cannot open/extract archive, saving to retry.txt")
-                        lock = FileLock("retry.lock")
-                        with lock: 
-                            with open("retry.txt", 'a' if os.path.exists("retry.txt") else 'w') as f:
-                                f.writelines([dump_file_name, ": ", str(e), "\n"])
+                        # print("Cannot open/extract archive, saving to retry.txt")
+                        # lock = FileLock("retry.lock")
+                        # with lock: 
+                        #     with open("retry.txt", 'a' if os.path.exists("retry.txt") else 'w') as f:
+                        #         f.writelines([dump_file_name, ": ", str(e), "\n"])
                         extraction_success = False
                 
                 print("Removing archive")
@@ -152,7 +152,7 @@ def run():
                 if stop or batch_size > 0 * 16 * 1024 * 1024 * 1024:
                     for index in range(len(table_names)):                
                         table_name = table_names[index]
-                        processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s.csv" % table_name))
+                        processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s_text.csv" % table_name))
                         processes[index].start()
 
                     for index in range(len(table_names)):
@@ -209,7 +209,7 @@ def run():
                 
         for index in range(len(table_names)):                
             table_name = table_names[index]
-            processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s.csv" % table_name))
+            processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s_text.csv" % table_name))
             processes[index].start()
 
         for index in range(len(table_names)):

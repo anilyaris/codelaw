@@ -7,12 +7,12 @@ from multiprocessing import Pool
 from database_connectors import Conntectors
 
 pipelines = {
-    "issue_comments": [ {"$project": {"id": 1, "updated_at": 1, "body": 1, "owner": 1, "repo": 1, "issue_id": 1} }],
-    "commits": [ {"$project": {"sha": 1, "message": "$commit.message", "files.filename": 1, "files.patch": 1} }],
+    "issue_comments": [ {"$project": {"id": 1, "body": 1, "owner": 1, "repo": 1, "issue_id": 1} }],
+    "commits": [ {"$project": {"sha": 1, "message": "$commit.message"} }],
     #"issue_events": [ {"$project": {"url": 0, "actor": 0, "event": 0, "commit_id": 0, "commit_url": 0, "created_at": 0, "owner": 0, "repo": 0, "issue_id": 0} }, {"$redact": {"$cond": {"if": {"$gt": [{ "$size": { "$objectToArray": "$$CURRENT" } }, 2]}, "then": "$$KEEP", "else": "$$PRUNE" } } }],
-    "issues": [ {"$project": {"number": 1, "title": 1, "state": 1, "updated_at": 1, "closed_at": 1, "body": 1, "closed_by.login": 1, "repo": 1, "owner": 1} }],
-    "pull_requests": [ {"$project": {"number": 1, "merged_at": 1, "merged": 1, "merged_by.login": 1, "repo": 1, "owner": 1} }],
-    "repos": [ {"$project": {"name": 1, "owner.login": 1, "private": 1, "pushed_at": 1, "homepage": 1, "has_wiki": 1, "has_pages": 1} }],
+    "issues": [ {"$project": {"number": 1, "title": 1, "body": 1, "repo": 1, "owner": 1} }],
+    #"pull_requests": [ {"$project": {"number": 1, "merged_at": 1, "merged": 1, "merged_by.login": 1, "repo": 1, "owner": 1} }],
+    #"repos": [ {"$project": {"name": 1, "owner.login": 1, "private": 1, "pushed_at": 1, "homepage": 1, "has_wiki": 1, "has_pages": 1} }],
 }
 
 def sanitize(text):
@@ -65,26 +65,18 @@ def label_commit(d):
 
 def stringify(d, n, i=None, c=0, t=None):
     if n == "issue_comments":
-        label_body(d)
         s = ','.join([
-                        d['repo'], d['owner'], str(d['issue_id']), str(d['id']), 
-                        "" if d['updated_at'] is None else d['updated_at'][:10] + ' ' + d['updated_at'][11:-1]]
-                        + ['t' if l else 'f' for l in d['labels']
+                        d['repo'], d['owner'], str(d['issue_id']), str(d['id']), "" if not d['body'] else d['body']                        
                     ])
 
     elif n == "commits":
         s = ','.join([
-                        d['sha']] + ['t' if l else 'f' for l in d['labels']
+                        d['sha'], "" if not d['message'] else d['message']
                     ])
 
     elif n == "issues":
-        label_title_body(d)
         s = ','.join([
-                        d['repo'], d['owner'], str(d['number']), 't' if d['state'] == 'open' else 'f',
-                        d['updated_at'][:10] + ' ' + d['updated_at'][11:-1], 
-                        "" if d['closed_at'] is None else d['closed_at'][:10] + ' ' + d['closed_at'][11:-1],
-                        d['closed_by']['login'] if 'closed_by' in d and d['closed_by'] else ""]
-                        + ['t' if l else 'f' for l in d['labels']
+                        d['repo'], d['owner'], str(d['number']), "" if not d['title'] else d['title'], "" if not d['body'] else d['body']
                     ])
 
     elif n == "pull_requests":
@@ -118,14 +110,14 @@ def fetchall(database_name, table_name, return_list):
     #document_index = [1]
     #document_count = mongo_client[database_name][table_name].count_documents({})
 
-    if table_name != "commits":
-        return_list[:] = [stringify(d, table_name) for d in mongo_client[database_name][table_name].aggregate(pipelines[table_name])]
+    #if table_name != "commits":
+    return_list[:] = [stringify(d, table_name) for d in mongo_client[database_name][table_name].aggregate(pipelines[table_name])]
     
-    else:
-        pool = Pool(processes=10)
-        return_list[:] = [stringify(d, table_name) for d in pool.imap_unordered(label_commit, mongo_client[database_name].commits.aggregate(pipelines["commits"]), 20000)]
+    # else:
+    #     pool = Pool(processes=10)
+    #     return_list[:] = [stringify(d, table_name) for d in pool.imap_unordered(label_commit, mongo_client[database_name].commits.aggregate(pipelines["commits"]), 20000)]
 
-        pool.close()
-        pool.join()
+    #     pool.close()
+    #     pool.join()
 
     connectors.close()
