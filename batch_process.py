@@ -11,49 +11,6 @@ import aggregations
 from multiprocessing import Process, Manager
 from filelock import FileLock
 
-from itertools import chain
-from collections import deque
-try:
-    from reprlib import repr
-except ImportError:
-    pass
-
-def total_size(o, handlers={}, verbose=False):
-    """ Returns the approximate memory footprint an object and all of its contents.
-
-    Automatically finds the contents of the following builtin containers and
-    their subclasses:  tuple, list, deque, dict, set and frozenset.
-    To search other containers, add handlers to iterate over their contents:
-
-        handlers = {SomeContainerClass: iter,
-                    OtherContainerClass: OtherContainerClass.get_elements}
-
-    """
-    dict_handler = lambda d: chain.from_iterable(d.items())
-    all_handlers = {tuple: iter,
-                    list: iter,
-                    deque: iter,
-                    dict: dict_handler,
-                    set: iter,
-                    frozenset: iter,
-                   }
-    all_handlers.update(handlers)     # user handlers take precedence
-    default_size = sys.getsizeof(0)       # estimate sizeof object without __sizeof__
-
-    def sizeof(o):
-        s = sys.getsizeof(o, default_size)
-
-        if verbose:
-            print(s, type(o), repr(o))
-
-        for typ, handler in all_handlers.items():
-            if isinstance(o, typ):
-                s += sum(map(sizeof, handler(o)))
-                break
-        return s
-
-    return sizeof(o)
-
 def write_batch(batch, file):
     lock = FileLock(file + ".lock")
     with lock: 
@@ -142,28 +99,25 @@ def run():
                     drop = True
 
             if drop:
-                current_batch_size = total_size(current_batch, handlers={type(current_batch[0]): iter})
                 for index in range(len(table_names)):
                     table_batches[table_names[index]] += current_batch[index]
                     current_batch[index] = None
                 connectors.mongo_client.drop_database(database_name)
                 
-                batch_size += current_batch_size
-                if stop or batch_size > 0 * 16 * 1024 * 1024 * 1024:
-                    for index in range(len(table_names)):                
+                for index in range(len(table_names)):                
+                    table_name = table_names[index]
+                    processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s.csv" % table_name))
+                    processes[index].start()
+
+                for index in range(len(table_names)):
+                    if processes[index] is not None:                
                         table_name = table_names[index]
-                        processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s.csv" % table_name))
-                        processes[index].start()
+                        processes[index].join()
+                        table_batches[table_name] = []
+                        processes[index] = None
 
-                    for index in range(len(table_names)):
-                        if processes[index] is not None:                
-                            table_name = table_names[index]
-                            processes[index].join()
-                            table_batches[table_name] = []
-                            processes[index] = None
-
-                    with open("start_line.txt" if direction_oldtonew else "end_line.txt", 'w') as f:
-                        f.write("%d" % line)
+                with open("start_line.txt" if direction_oldtonew else "end_line.txt", 'w') as f:
+                    f.write("%d" % line)
                     
         if stop:
             break
