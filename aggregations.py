@@ -8,7 +8,7 @@ from database_connectors import Conntectors
 
 pipelines = {
     "issue_comments": [ {"$project": {"id": 1, "created_at": 1, "owner": 1, "repo": 1, "issue_id": 1} }],
-    "commits": [ {"$project": {"sha": 1, "message": "$commit.message", "created_at": "$commit.commiter.date", "files.filename": 1} }],
+    "commits": [ {"$project": {"sha": 1, "message": "$commit.message", "created_at": "$commit.committer.date", "files.filename": 1} }],
     #"issue_events": [ {"$project": {"url": 0, "actor": 0, "event": 0, "commit_id": 0, "commit_url": 0, "created_at": 0, "owner": 0, "repo": 0, "issue_id": 0} }, {"$redact": {"$cond": {"if": {"$gt": [{ "$size": { "$objectToArray": "$$CURRENT" } }, 2]}, "then": "$$KEEP", "else": "$$PRUNE" } } }],
     "issues": [ {"$project": {"number": 1, "title": 1, "created_at": 1, "repo": 1, "owner": 1} }],
     #"pull_requests": [ {"$project": {"number": 1, "merged_at": 1, "merged": 1, "merged_by.login": 1, "repo": 1, "owner": 1} }],
