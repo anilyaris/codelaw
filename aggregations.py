@@ -65,19 +65,19 @@ def label_commit(d):
 
 def stringify(d, n, i=None, c=0, t=None):
     if n == "issue_comments":
-        s = ','.join([
-                        d['repo'], d['owner'], str(d['issue_id']), str(d['id']), "" if not d['body'] else d['body']                        
-                    ])
+        s = [
+                d['repo'], d['owner'], str(d['issue_id']), str(d['id']), "" if not d['body'] else d['body']                        
+            ]
 
     elif n == "commits":
-        s = ','.join([
-                        d['sha'], "" if not d['message'] else d['message']
-                    ])
+        s = [
+                d['sha'], "" if not d['message'] else d['message']
+            ]
 
     elif n == "issues":
-        s = ','.join([
-                        d['repo'], d['owner'], str(d['number']), "" if not d['title'] else d['title'], "" if not d['body'] else d['body']
-                    ])
+        s = [
+                d['repo'], d['owner'], str(d['number']), "" if not d['title'] else d['title'], "" if not d['body'] else d['body']
+            ]
 
     elif n == "pull_requests":
         s = ','.join([
@@ -101,7 +101,7 @@ def stringify(d, n, i=None, c=0, t=None):
                 f.write(str(time.time() - t)) 
         i[0] += 1
 
-    return s + '\n'
+    return s
 
 def fetchall(database_name, table_name, return_list):
     connectors = Conntectors()

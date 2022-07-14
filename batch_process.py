@@ -10,12 +10,14 @@ from database_connectors import Conntectors
 import aggregations
 from multiprocessing import Process, Manager
 from filelock import FileLock
+from csv import writer
 
 def write_batch(batch, file):
     lock = FileLock(file + ".lock")
     with lock: 
-        with open(file, 'a' if os.path.exists(file) else 'w') as f:
-            f.writelines(batch)
+        with open(file, 'a' if os.path.exists(file) else 'w', newline='') as f:
+            csvwriter = writer(f, lineterminator='\n')
+            csvwriter.writerows(batch)
 
 def run():
     connectors = Conntectors()
