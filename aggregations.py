@@ -8,7 +8,8 @@ from database_connectors import Conntectors
 
 pipelines = {
     "issue_comments": [ {"$project": {"id": 1, "body": 1, "owner": 1, "repo": 1, "issue_id": 1} }],
-    "commits": [ {"$project": {"sha": 1, "message": "$commit.message"} }],
+    "commits": [ {"$project": {"sha": 1, "message": "$commit.message", "html_url": 1} }],
+    "commit_filenames": [ {"$project": {"sha": 1, "files.filename": 1} }],
     #"issue_events": [ {"$project": {"url": 0, "actor": 0, "event": 0, "commit_id": 0, "commit_url": 0, "created_at": 0, "owner": 0, "repo": 0, "issue_id": 0} }, {"$redact": {"$cond": {"if": {"$gt": [{ "$size": { "$objectToArray": "$$CURRENT" } }, 2]}, "then": "$$KEEP", "else": "$$PRUNE" } } }],
     "issues": [ {"$project": {"number": 1, "title": 1, "body": 1, "repo": 1, "owner": 1} }],
     #"pull_requests": [ {"$project": {"number": 1, "merged_at": 1, "merged": 1, "merged_by.login": 1, "repo": 1, "owner": 1} }],
@@ -70,9 +71,24 @@ def stringify(d, n, i=None, c=0, t=None):
             ]
 
     elif n == "commits":
+        u = d['html_url']
+        start = u.find(':') + 14
+        end = u.find('/', start)
+        owner = u[start:end]
+        start = end + 1
+        end = u.find('/', start)
+        repo = u[start:end]
+
         s = [
-                d['sha'], "" if not d['message'] else d['message']
+                d['sha'], repo, owner, "" if not d['message'] else d['message']
             ]
+
+    elif n == "commit_filenames":
+        s = []
+        if 'files' in d and d['files']:
+            for f in d['files']:
+                if 'filename' in f and f['filename']:
+                    s.append([d["sha"], f['filename']])
 
     elif n == "issues":
         s = [
@@ -110,8 +126,10 @@ def fetchall(database_name, table_name, return_list):
     #document_index = [1]
     #document_count = mongo_client[database_name][table_name].count_documents({})
 
-    #if table_name != "commits":
-    return_list[:] = [stringify(d, table_name) for d in mongo_client[database_name][table_name].aggregate(pipelines[table_name])]
+    if table_name == "commit_filenames":
+        return_list[:] = [s for d in mongo_client[database_name]["commits"].aggregate(pipelines[table_name]) for s in stringify(d, table_name)]
+    else:
+        return_list[:] = [stringify(d, table_name) for d in mongo_client[database_name][table_name].aggregate(pipelines[table_name])]
     
     # else:
     #     pool = Pool(processes=10)

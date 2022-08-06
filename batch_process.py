@@ -16,7 +16,7 @@ def write_batch(batch, file):
     lock = FileLock(file + ".lock")
     with lock: 
         with open(file, 'a' if os.path.exists(file) else 'w', newline='') as f:
-            csvwriter = writer(f, lineterminator='\n')
+            csvwriter = writer(f, lineterminator='\n', escapechar='"')
             csvwriter.writerows(batch)
 
 def run():
@@ -28,10 +28,11 @@ def run():
     batch_size = 0
     processes = [None] * len(table_names)
     
+    d = 0
     direction_oldtonew = True
     if len(sys.argv) > 1:
-        d = sys.argv[1][0] 
-        direction_oldtonew = d == 'o' or d == '0'
+        d = int(sys.argv[1][0]) 
+        direction_oldtonew = d % 2 == 0
 
     main_page_url = "http://ghtorrent-downloads.ewi.tudelft.nl/mongo-daily/"
     with urlopen(main_page_url) as f:
@@ -52,11 +53,25 @@ def run():
     else:
         end_line = len(dump_files) - 3
 
+    if os.path.exists("mid_start_line.txt"):
+        with open("mid_start_line.txt", 'r') as f:
+            mid_start_line = int(f.read())
+    else:
+        mid_start_line = len(dump_files) // 2 + 1
+
+    if os.path.exists("mid_end_line.txt"):
+        with open("mid_end_line.txt", 'r') as f:
+            mid_end_line = int(f.read())
+    else:
+        mid_end_line = len(dump_files) // 2
+
+    if d == 0 or d == 3:
+        end_line = mid_end_line
+    else:
+        start_line = mid_start_line
     line = start_line if direction_oldtonew else end_line
 
-    database_name = "ghtorrent"
-    if direction_oldtonew:
-        database_name += "2"
+    database_name = "ghtorrent%d" % d
     extraction_directory = "/cluster/scratch/ayaris/%s/dump/github/" % database_name
 
     cutoff = (start_line + end_line) // 2
@@ -118,7 +133,7 @@ def run():
                         table_batches[table_name] = []
                         processes[index] = None
 
-                with open("start_line.txt" if direction_oldtonew else "end_line.txt", 'w') as f:
+                with open(("mid_" if d > 1 else "") + ("start_line.txt" if direction_oldtonew else "end_line.txt"), 'w') as f:
                     f.write("%d" % line)
                     
         if stop:
@@ -175,7 +190,7 @@ def run():
                 table_batches[table_name] = []
                 processes[index] = None
 
-        with open("start_line.txt" if direction_oldtonew else "end_line.txt", 'w') as f:
+        with open(("mid_" if d > 1 else "") + ("start_line.txt" if direction_oldtonew else "end_line.txt"), 'w') as f:
             f.write("%d" % line)
 
     connectors.close()
