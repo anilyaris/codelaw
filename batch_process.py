@@ -57,13 +57,13 @@ def run():
         with open("mid_start_line.txt", 'r') as f:
             mid_start_line = int(f.read())
     else:
-        mid_start_line = len(dump_files) // 2 + 1
+        mid_start_line = (start_line + end_line) // 2 + 1
 
     if os.path.exists("mid_end_line.txt"):
         with open("mid_end_line.txt", 'r') as f:
             mid_end_line = int(f.read())
     else:
-        mid_end_line = len(dump_files) // 2
+        mid_end_line = (start_line + end_line) // 2
 
     if d == 0 or d == 3:
         end_line = mid_end_line
@@ -123,7 +123,7 @@ def run():
                 
                 for index in range(len(table_names)):                
                     table_name = table_names[index]
-                    processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s_text.csv" % table_name))
+                    processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s_text_%d.csv" % (table_name, d)))
                     processes[index].start()
 
                 for index in range(len(table_names)):
@@ -180,7 +180,7 @@ def run():
                 
         for index in range(len(table_names)):                
             table_name = table_names[index]
-            processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s_text.csv" % table_name))
+            processes[index] = Process(target=write_batch, args=(table_batches[table_name], "/cluster/scratch/ayaris/csvs/%s_text_%d.csv" % (table_name, d)))
             processes[index].start()
 
         for index in range(len(table_names)):
