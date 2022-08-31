@@ -17,4 +17,7 @@ psql -d postgres -h $host -c "COPY mongo_issues FROM $data/issues.csv WITH (FORM
 psql -d postgres -h $host -c "COPY mongo_pull_requests FROM $data/pull_requests.csv WITH (FORMAT 'csv')"
 psql -d postgres -h $host -c "COPY mongo_projects FROM $data/repos.csv WITH (FORMAT 'csv')"
 
+psql -d postgres -h $host -c "COPY mongo_issue_comments FROM $data/new_comments.csv WITH (FORMAT 'csv')"
+psql -d postgres -h $host -c "COPY mongo_issues FROM $data/new_issues.csv WITH (FORMAT 'csv')"
+
 #: ft=bash
