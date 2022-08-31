@@ -11,9 +11,9 @@ do
   esac
 done
 
-psql -d postgres -h $host -c "COPY mongo_issue_comments FROM $data/issue_comments.csv WITH (FORMAT 'csv')"
-psql -d postgres -h $host -c "COPY mongo_commits FROM $data/commits.csv WITH (FORMAT 'csv')"
-psql -d postgres -h $host -c "COPY mongo_issues FROM $data/issues.csv WITH (FORMAT 'csv')"
-psql -d postgres -h $host -c "COPY mongo_projecs FROM $data/repos.csv WITH (FORMAT 'csv')"
+psql -d postgres -h $host -c "COPY mongo_issue_comments_extended FROM $data/issue_comments_extended.csv WITH (FORMAT 'csv')"
+psql -d postgres -h $host -c "COPY mongo_commits_extended FROM $data/commits_extended.csv WITH (FORMAT 'csv')"
+psql -d postgres -h $host -c "COPY mongo_issues_extended FROM $data/issues_extended.csv WITH (FORMAT 'csv')"
+psql -d postgres -h $host -c "COPY mongo_projects_extended FROM $data/repos_extended.csv WITH (FORMAT 'csv')"
 
 #: ft=bash
