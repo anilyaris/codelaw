@@ -9,6 +9,6 @@ do
   esac
 done
 
-psql -d postgres -h $host -f ./sql/new_tables.sql
+psql -d ghtorrent -U ghtorrent -h $host -f ./sql/new_tables.sql
 
 #: ft=bash
